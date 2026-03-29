@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pandas>=3.0.1",
+    "beautifulsoup4>=4.13",
+    "playwright>=1.58.0",
 ]
 
 [dependency-groups]
@@ -22,7 +24,7 @@ requires = ["uv_build>=0.11.2,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["srt2lrc", "title_extracter"]
+module-name = ["srt2lrc", "toc_extractor"]
 
 
 # https://github.com/anthropics/claude-cookbooks/blob/main/pyproject.toml
