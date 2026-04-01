@@ -13,7 +13,7 @@ TurboScribe 워터마크는 자동으로 제거된다.
     # 여러 파일 지정
     uv run python src/srt2lrc/srt2lrc.py file1.srt file2.srt file3.srt
 
-변환 결과는 같은 폴더에 .lrc 확장자로 생성된다.
+변환 결과는 srt2lrc/lrc/ 폴더에 .lrc 확장자로 생성된다.
 """
 
 import re
@@ -72,11 +72,12 @@ def convert_srt_to_lrc(srt_text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def convert_file(srt_path: Path) -> Path:
+def convert_file(srt_path: Path, output_dir: Path) -> Path:
     """Convert a single SRT file to LRC. Returns the output path."""
     srt_text = srt_path.read_text(encoding="utf-8")
     lrc_text = convert_srt_to_lrc(srt_text)
-    lrc_path = srt_path.with_suffix(".lrc")
+    output_dir.mkdir(exist_ok=True)
+    lrc_path = output_dir / srt_path.with_suffix(".lrc").name
     lrc_path.write_text(lrc_text, encoding="utf-8")
     return lrc_path
 
@@ -93,9 +94,11 @@ def main():
         print("No SRT files found.")
         return
 
+    output_dir = srt_dir / "lrc"
+
     for srt_file in srt_files:
-        lrc_path = convert_file(srt_file)
-        print(f"Converted: {srt_file.name} -> {lrc_path.name}")
+        lrc_path = convert_file(srt_file, output_dir)
+        print(f"Converted: {srt_file.name} -> {lrc_path.relative_to(srt_dir)}")
 
 
 if __name__ == "__main__":
