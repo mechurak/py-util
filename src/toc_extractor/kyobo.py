@@ -6,18 +6,21 @@
     # 교보문고 URL로 목차 추출 (stdout 출력)
     uv run python src/toc_extractor/kyobo.py https://product.kyobobook.co.kr/detail/S000218753254
 
-    # 결과를 파일로 저장
-    uv run python src/toc_extractor/kyobo.py https://product.kyobobook.co.kr/detail/S000218753254 -o output.md
+    # 또는 .env 파일에 KYOBO_URL 설정 후 인자 없이 실행
+    uv run python src/toc_extractor/kyobo.py
 
 사전 준비:
     uv run playwright install chromium
 """
 
+import os
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 KYOBOBOOK_URL_PATTERN = re.compile(r"https://product\.kyobobook\.co\.kr/detail/\w+")
@@ -160,20 +163,19 @@ def toc_to_logseq(info: BookInfo) -> str:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: uv run python src/toc_extractor/kyobo.py <교보문고_URL> [-o output.md]")
+    load_dotenv(Path(__file__).parent / ".env")
+
+    # CLI 인자가 있으면 CLI 우선, 없으면 .env에서 읽기
+    url = sys.argv[1] if len(sys.argv) >= 2 else os.getenv("KYOBO_URL", "")
+
+    if not url:
+        print("Usage: uv run python src/toc_extractor/kyobo.py <교보문고_URL>")
+        print("  또는 .env 파일에 KYOBO_URL 설정")
         sys.exit(1)
 
-    url = sys.argv[1]
     if not KYOBOBOOK_URL_PATTERN.match(url):
         print(f"Error: 유효한 교보문고 상품 URL이 아닙니다: {url}")
         sys.exit(1)
-
-    output_path = None
-    if "-o" in sys.argv:
-        idx = sys.argv.index("-o")
-        if idx + 1 < len(sys.argv):
-            output_path = sys.argv[idx + 1]
 
     html = fetch_page(url)
     info = parse_book_info(html, url)
@@ -183,19 +185,7 @@ def main():
         sys.exit(1)
 
     result = toc_to_logseq(info)
-
-    if output_path:
-        from pathlib import Path
-
-        Path(output_path).write_text(result, encoding="utf-8")
-        print(f"저장 완료: {output_path}")
-        print(f"  제목: {info.title}")
-        print(f"  저자: {info.author}")
-        print(f"  출판사: {info.publisher}")
-        print(f"  출간일: {info.release_date}")
-        print(f"  목차 항목: {len(info.toc_lines)}개")
-    else:
-        print(result)
+    print(result)
 
 
 if __name__ == "__main__":
