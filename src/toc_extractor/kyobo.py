@@ -28,6 +28,7 @@ KYOBOBOOK_URL_PATTERN = re.compile(r"https://product\.kyobobook\.co\.kr/detail/\
 # 목차 라인 패턴
 PART_PATTERN = re.compile(r"^\[(?:PART\s*)?(\d+부?)\]\s*(.+)", re.IGNORECASE)
 CHAPTER_PATTERN = re.compile(r"^(?:Chapter\s+)?(\d+)\s*[_.\s]\s*(.+)", re.IGNORECASE)
+KO_CHAPTER_PATTERN = re.compile(r"^(\d+)장\s+(.+)")
 APPENDIX_PATTERN = re.compile(r"^(Appendix\s*\w+)[._]?\s*(.+)", re.IGNORECASE)
 SECTION_PATTERN = re.compile(r"^(\d+\.\d+)\s+(.+)")
 SUBSECTION_PATTERN = re.compile(r"^(\d+\.\d+\.\d+)\s+(.+)")
@@ -118,6 +119,8 @@ def classify_line(line: str) -> tuple[str, str, str]:
         return "subsection", m.group(1), m.group(2).strip()
     if m := SECTION_PATTERN.match(stripped):
         return "section", m.group(1), m.group(2).strip()
+    if m := KO_CHAPTER_PATTERN.match(stripped):
+        return "chapter_ko", m.group(1), m.group(2).strip()
     if m := CHAPTER_PATTERN.match(stripped):
         num = m.group(1)
         title = re.sub(r"^[_.\s]+", "", m.group(2)).strip()
@@ -147,6 +150,8 @@ def toc_to_logseq(info: BookInfo) -> str:
 
         if line_type == "part":
             lines.append(f"- ## [{number}] {title}")
+        elif line_type == "chapter_ko":
+            lines.append(f"- ## {number}장 {title}")
         elif line_type == "chapter":
             lines.append(f"- ## Chapter {number}. {title}")
         elif line_type == "appendix":
