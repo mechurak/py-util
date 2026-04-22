@@ -24,3 +24,6 @@ wheels/
 # Media files
 *.srt
 *.lrc
+
+# TOC extractor
+src/toc_extractor/*.html
