@@ -1,4 +1,4 @@
-"""교보문고 도서 페이지에서 목차를 추출하여 Logseq 페이지 형식으로 변환한다.
+"""교보문고 도서 페이지에서 목차를 추출하여 Obsidian 노트 형식으로 변환한다.
 
 교보문고는 봇 요청을 차단하므로 Playwright(headless Chrome)를 사용하여 페이지를 렌더링한다.
 
@@ -27,11 +27,15 @@ KYOBOBOOK_URL_PATTERN = re.compile(r"https://product\.kyobobook\.co\.kr/detail/\
 
 # 목차 라인 패턴
 PART_PATTERN = re.compile(r"^\[(?:PART\s*)?(\d+부?)\]\s*(.+)", re.IGNORECASE)
+BRACKET_HEADING_PATTERN = re.compile(r"^\[([^\]]+)\]\s*(.*)")
 CHAPTER_PATTERN = re.compile(r"^(?:Chapter\s+)?(\d+)\s*[_.\s]\s*(.+)", re.IGNORECASE)
 KO_CHAPTER_PATTERN = re.compile(r"^(\d+)장\s+(.+)")
 APPENDIX_PATTERN = re.compile(r"^(Appendix\s*\w+)[._]?\s*(.+)", re.IGNORECASE)
 SECTION_PATTERN = re.compile(r"^(\d+\.\d+)\s+(.+)")
 SUBSECTION_PATTERN = re.compile(r"^(\d+\.\d+\.\d+)\s+(.+)")
+
+# 헤더 아래 항목 들여쓰기 단위 (범용 .md 호환을 위해 스페이스 4칸)
+INDENT = "    "
 
 
 @dataclass
@@ -113,6 +117,8 @@ def classify_line(line: str) -> tuple[str, str, str]:
         if not part_num.endswith("부"):
             part_num += "부"
         return "part", part_num, m.group(2).strip()
+    if m := BRACKET_HEADING_PATTERN.match(stripped):
+        return "bracket", m.group(1).strip(), m.group(2).strip()
     if m := APPENDIX_PATTERN.match(stripped):
         return "appendix", m.group(1), m.group(2).strip()
     if m := SUBSECTION_PATTERN.match(stripped):
@@ -129,40 +135,68 @@ def classify_line(line: str) -> tuple[str, str, str]:
     return "other", "", stripped
 
 
-def toc_to_logseq(info: BookInfo) -> str:
-    """BookInfo를 Logseq 페이지 마크다운 형식으로 변환한다."""
+def _yaml_str(value: str) -> str:
+    """YAML 프론트매터에 안전하게 넣기 위해 문자열을 큰따옴표로 감싼다."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def toc_to_obsidian(info: BookInfo) -> str:
+    """BookInfo를 Obsidian 노트 마크다운 형식으로 변환한다."""
     lines = []
 
-    # 프로퍼티 블록
-    lines.append("- type:: book")
-    if info.cover_image:
-        lines.append(f"  cover:: ![표지]({info.cover_image}){{:width 150}}")
+    # 프로퍼티 (YAML 프론트매터)
+    lines.append("---")
+    lines.append("type: book")
+    if info.author:
+        lines.append(f"author: {_yaml_str(info.author)}")
     if info.release_date:
-        lines.append(f"  release:: {info.release_date}")
-    lines.append("  tags:: ")
+        lines.append(f"release: {info.release_date}")
+    if info.cover_image:
+        lines.append(f"cover: {info.cover_image}")
+    lines.append("tags:")
+    lines.append("---")
+    lines.append("")
+
+    # 표지 이미지
+    if info.cover_image:
+        lines.append(f"![표지|150]({info.cover_image})")
+        lines.append("")
 
     # 링크
-    lines.append(f"- 교보문고 링크 : {info.url}")
+    lines.append(f"[교보문고 링크]({info.url})")
+    lines.append("")
 
     # 목차 변환
     for raw_line in info.toc_lines:
         line_type, number, title = classify_line(raw_line)
 
+        is_heading = line_type in ("part", "bracket", "chapter_ko", "chapter", "appendix")
+        if is_heading and lines and lines[-1] != "":
+            lines.append("")
+
         if line_type == "part":
-            lines.append(f"- ## [{number}] {title}")
+            lines.append(f"## [{number}] {title}")
+        elif line_type == "bracket":
+            lines.append(f"## [{number}] {title}".rstrip())
         elif line_type == "chapter_ko":
-            lines.append(f"- ## {number}장 {title}")
+            lines.append(f"## {number}장 {title}")
         elif line_type == "chapter":
-            lines.append(f"- ## Chapter {number}. {title}")
+            lines.append(f"## Chapter {number}. {title}")
         elif line_type == "appendix":
-            lines.append(f"- ## {number}. {title}")
+            lines.append(f"## {number}. {title}")
         elif line_type == "section":
-            lines.append(f"  - {number} {title}")
+            lines.append(f"- {number} {title}")
         elif line_type == "subsection":
-            lines.append(f"    - {number} {title}")
+            lines.append(f"{INDENT}- {number} {title}")
         elif line_type == "other":
             if title:
-                lines.append(f"  - {title}")
+                # 소스의 선행 "- " 마커 개수만큼 하위 단계로 들여쓴다
+                depth = 0
+                while m := re.match(r"^-\s+", title):
+                    depth += 1
+                    title = title[m.end() :]
+                lines.append(f"{INDENT * depth}- {title}")
 
     return "\n".join(lines) + "\n"
 
@@ -189,7 +223,7 @@ def main():
         print("Error: 목차를 찾을 수 없습니다.")
         sys.exit(1)
 
-    result = toc_to_logseq(info)
+    result = toc_to_obsidian(info)
     print(result)
 
 
